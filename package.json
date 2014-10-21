@@ -1,0 +1,43 @@
+{
+  "name": "urequire-grunt-spec-runner",
+  "description": "Automagically generates and runs Specs using mocha, chai & phantomjs given a `lib` and a `specs` bundleBuilders from urequire (running on grunt).",
+  "version": "0.1.0",
+  "homepage": "https://github.com/anodynos/urequire-grunt-spec-runner",
+  "author": {
+    "name": "Agelos Pikoulas",
+    "email": "agelos.pikoulas@gmail.com"
+  },
+  "licenses": [
+    {
+      "type": "MIT",
+      "url": "http://www.opensource.org/licenses/mit-license.php"
+    }
+  ],
+  "keywords": [
+    "urequire",
+    "grunt",
+    "specs",
+    "mocha",
+    "chai",
+    "spec runner"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/anodynos/urequire-grunt-spec-runner"
+  },
+  "bugs": {
+    "url": "git://github.com/anodynos/urequire-grunt-spec-runner/issues",
+    "email": "agelos.pikoulas@gmail.com"
+  },
+  "main": "./source/code/urequire-grunt-spec-runner.coffee",
+  "engines": {
+    "node": ">=0.10"
+  },
+  "dependencies": {
+    "fsp": "^0.1.1",
+    "htmltidy": "0.0.6",
+    "teacup": "^0.4.2",
+    "uberscore": "0.0.17",
+    "when": "^3.5.0"
+  }
+}
