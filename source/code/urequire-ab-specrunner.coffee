@@ -131,7 +131,7 @@ module.exports = specRunner = (err, specBB, options)->
     else ''
 
   generateHTML = ->
-    tidyP teacup.render ->
+    HTML = teacup.render ->
       doctype 5
       html ->
         head ->
@@ -191,6 +191,10 @@ module.exports = specRunner = (err, specBB, options)->
                       }
                     }
                """ + (if isAMD then ");" else '')
+    if options.tidy
+      tidyP HTML
+    else
+      When HTML
 
   specPathHTML = "#{specBB.build.dstPath}/urequire-ab-specrunner-#{if isAMD then 'AMD' else 'script'}-#{libBB.build.target}_#{specBB.build.target}.html"
   writeHTMLSpec = (htmlText)->

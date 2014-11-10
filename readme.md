@@ -96,7 +96,7 @@ By default its `false`, but you can change to `true` if you're impatient.
 ### `specRunners`
 
 There are 2 + 1 spec runners called `mocha-cli`, `mocha-phantomjs` and the +1 is `grunt-mocha`.
-By default *urequire-ab-specrunner* runs only the first two (cause `grunt-mocha` is veeeery slow an not really needed) in these cases:
+By default *urequire-ab-specrunner* runs only the first two (cause `grunt-mocha` is veeeery slow and not really needed) in these cases:
 
   * If your build's templates are anything but `nodejs` and `AMD`, both `mocha-cli`, `mocha-phantomjs` run (ie you automatically test on `nodejs` and `browser`).
 
@@ -114,9 +114,15 @@ which is the __soft default__, meaning it will uncomplainingly skip incompatible
 
 ### `exec`
 
-If `exec: true` it uses `require('child_process').exec` instead of `require('child_process').spawn` (the default).
+If `exec: truthy` it uses `require('child_process').exec` instead of `require('child_process').spawn` (the default).
 
-Spawn is preferred cause it taps mocha output as its generated. Use it only if you get `ENOENT` problems while running `mocha` or `mocha-phantomjs`.
+Spawn is preferred cause it taps mocha output (and assertion failures) as its generated. Use it only if you get `ENOENT` problems while running `mocha` or `mocha-phantomjs` (which you shouldn't, even on windows).
+
+### `tidy`
+
+If `tidy: truthy` it uses [`htmltidy`](https://github.com/vavere/htmltidy) to beautify the resulted HTML. By default its off.
+
+**Note that htmltidy has a couple of known [breaking issues](https://github.com/vavere/htmltidy/issues/17) especially on x64 linux distros [(spawn ENOENT)](https://github.com/vavere/htmltidy/issues/11) cause its just a nodejs wrapper to an outdated 32bit binary, but [there are workarounds](https://github.com/vavere/htmltidy/issues/11#issuecomment-62376405). Also its author considers it experimental on darwin (Mac).** 
 
 ### `debugLevel`
 
