@@ -193,7 +193,9 @@ module.exports = specRunner = (err, specBB, options)->
                """ + (if isAMD then ");" else '')
 
   specPathHTML = "#{specBB.build.dstPath}/urequire-ab-specrunner-#{if isAMD then 'AMD' else 'script'}-#{libBB.build.target}_#{specBB.build.target}.html"
-  writeHTMLSpec = (htmlText)-> fsp.writeFile specPathHTML, htmlText
+  writeHTMLSpec = (htmlText)->
+    l.deb 80, "Saving spec HTML as `#{specPathHTML}`"
+    fsp.outputFile specPathHTML, htmlText
 
   isHTMLsaved = false
   generateAndSaveHTML = ->
