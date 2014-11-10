@@ -205,6 +205,7 @@ module.exports = specRunner = (err, specBB, options)->
 
   spawnRunMocha = (cmd, filename)->
     mochaParams  = _.filter((options.mochaOptions or '').split /\s/).concat filename
+    cmd += '.cmd' if process.platform is "win32" # solves NOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
     l.ok "Spawning `#{cmd} #{mochaParams.join ' '}`"
     When.promise (resolve, reject)->
       cp = spawn cmd, mochaParams
