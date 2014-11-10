@@ -1,8 +1,8 @@
 {
-  "name": "urequire-grunt-spec-runner",
-  "description": "Automagically generates and runs Specs using mocha, chai & phantomjs given a `lib` and a `specs` bundleBuilders from urequire (running on grunt).",
+  "name": "urequire-ab-specrunner",
+  "description": "Automagically generates & runs mocha/chai/phantomjs tests from a uRequire `lib` & `specs` build.",
   "version": "0.1.0",
-  "homepage": "https://github.com/anodynos/urequire-grunt-spec-runner",
+  "homepage": "https://github.com/anodynos/urequire-ab-specrunner",
   "author": {
     "name": "Agelos Pikoulas",
     "email": "agelos.pikoulas@gmail.com"
@@ -15,27 +15,41 @@
   ],
   "keywords": [
     "urequire",
-    "grunt",
     "specs",
+    "test",
+    "runner",
     "mocha",
     "chai",
+    "phantomjs",
+    "mocha-phantomjs",
+    "grunt",
     "spec runner"
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/anodynos/urequire-grunt-spec-runner"
+    "url": "git://github.com/anodynos/urequire-ab-specrunner"
   },
   "bugs": {
-    "url": "git://github.com/anodynos/urequire-grunt-spec-runner/issues",
+    "url": "git://github.com/anodynos/urequire-ab-specrunner/issues",
     "email": "agelos.pikoulas@gmail.com"
   },
-  "main": "./source/code/urequire-grunt-spec-runner.coffee",
+  "main": "./build/code/urequire-ab-specrunner.js",
   "engines": {
     "node": ">=0.10"
   },
+  "scripts": {
+    "build": "coffee -cb -o build/code source/code",
+    "watch": "coffee -cbw -o build/code source/code",
+    "test": "echo 'Check git://github.com/anodynos/urequire-example'"
+  },
+  "peerDependencies": {
+    "urequire": "^0.7.0"
+  },
   "dependencies": {
-    "fsp": "^0.1.1",
-    "htmltidy": "0.0.6",
+    "compare-semver": "^0.3.3",
+    "fs-extra": "^0.12.0",
+    "fs-promise": "^0.2.0",
+    "htmltidy": "^0.0.6",
     "teacup": "^0.4.2",
     "uberscore": "0.0.17",
     "when": "^3.5.0"
