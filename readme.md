@@ -82,7 +82,7 @@ You can pass options to the `mocha` or `mocha-phantomjs` CLI executables - just 
 
 ### `globals`
 
-By default `mocha.run().globals([...])` are automatically detected by your urequire config, shims etc. You can add some of your own:
+By default `mocha.run().globals([...])` are automatically detected by your urequire config, locals, shims etc. You can add some of your own:
 
 ##### Example
 ```
@@ -110,9 +110,17 @@ If you force it to use an incompatible one with your template (eg `AMD` on `moch
     specRunners: ['mocha-cli', 'mocha-phantomjs']
 ```
 
+which is the __soft default__, meaning it will uncomplainingly skip incompatible runtime tests (i.e `nodejs` template builds on `mocha-phantomjs`).
+
+### `exec`
+
+If `exec: true` it uses `require('child_process').exec` instead of `require('child_process').spawn` (the default).
+
+Spawn is preferred cause it taps mocha output as its generated. Use it only if you get `ENOENT` problems while running `mocha` or `mocha-phantomjs`.
+
 ### `debugLevel`
 
-What it says, goes from `0` (default) to `100`+.
+Prints debug info, goes from `0` (default) to `100`.
 
 # License
 

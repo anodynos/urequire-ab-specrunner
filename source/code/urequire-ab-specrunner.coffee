@@ -15,6 +15,7 @@ body, title, h1, div, comment, ul, li, raw } = teacup = require 'teacup'
 pkg = JSON.parse fsp.readFileSync __dirname + '/../../package.json'
 
 spawn = require('child_process').spawn
+execP = When.node.lift require("child_process").exec
 
 gruntWatching = false
 
@@ -203,17 +204,26 @@ module.exports = specRunner = (err, specBB, options)->
         l.deb 80, "Saved spec HTML to `#{specPathHTML}`"
         isHTMLsaved = true
 
-  spawnRunMocha = (cmd, filename)->
+  runMochaShell = (cmd, filename)->
     mochaParams  = _.filter((options.mochaOptions or '').split /\s/).concat filename
-    cmd += '.cmd' if process.platform is "win32" # solves NOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
-    l.ok "Spawning `#{cmd} #{mochaParams.join ' '}`"
-    When.promise (resolve, reject)->
-      cp = spawn cmd, mochaParams
-      cp.stdout.pipe process.stdout
-      cp.stderr.pipe process.stderr
-      cp.on 'close', (code)->
-        if code is 0 then resolve() else
-          reject new Error "`urequire-ab-specrunner` error: `#{cmd}` returned error code #{code}"
+    l.deb 30, "Running shell `#{cmd} #{mochaParams.join ' '}`"
+    if not options.exec #default
+      cmd += '.cmd' if process.platform is "win32" # solves ENOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
+      l.ok "spawn-ing `#{cmd} #{mochaParams.join ' '}`"
+      When.promise (resolve, reject)->
+        cp = spawn cmd, mochaParams
+        cp.stdout.pipe process.stdout
+        cp.stderr.pipe process.stderr
+        cp.on 'close', (code)->
+          if code is 0 then resolve() else
+            reject new Error "`urequire-ab-specrunner` error: `#{cmd}` returned error code #{code}"
+    else
+      l.ok "exec-ing `#{cmd} #{mochaParams.join ' '}`"
+      cmd = "#{cmd} #{mochaParams.join ' '}"
+      execP(cmd).then(
+        (res)-> l.log res[0]
+        (err)-> l.err err
+      )
 
   #  # UMD in nodejs mocha runner
   #  # write a "requirejs.config.json" with { baseUrl:"../UMD" } to spec's dstPath
@@ -240,7 +250,7 @@ module.exports = specRunner = (err, specBB, options)->
       reject: ['nodejs']
       run: ->
         generateAndSaveHTML().then ->
-          spawnRunMocha 'mocha-phantomjs', specPathHTML
+          runMochaShell 'mocha-phantomjs', specPathHTML
 
     'mocha-cli':
       reject: ['AMD']
@@ -252,7 +262,7 @@ module.exports = specRunner = (err, specBB, options)->
               "main": upath.join '../../', specToLibPath, libBB.build.dstMainFilename
             }, 'utf8'
         ).then ->
-          spawnRunMocha 'mocha', specBB.build.dstMainFilepath
+          runMochaShell 'mocha', specBB.build.dstMainFilepath
 
   templates = ['UMD', 'UMDplain', 'AMD', 'nodejs', 'combined']
 
