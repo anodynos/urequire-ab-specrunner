@@ -10,16 +10,18 @@ fsp = require 'fs-promise' # uses fs-extra as well
 tidyP = When.node.lift require('htmltidy').tidy
 
 { renderable, render, html, doctype, head, link, meta, script, p
-body, title, h1, div, comment, ul, li, raw } = teacup = require 'teacup'
+body, title, h1, h2, h3, h4, div, comment, ul, li, raw } = teacup = require 'teacup'
 
 pkg = JSON.parse fsp.readFileSync __dirname + '/../../package.json'
+
+upath = require 'upath'
 
 spawn = require('child_process').spawn
 execP = When.node.lift require("child_process").exec
 
 gruntWatching = false
 
-#@todo: modulerize as an extendible class, so other test frameworks can be based on it!
+# @todo: modulerize as an extendible class, so other test frameworks can be based on it!
 
 module.exports = specRunner = (err, specBB, options)->
   options = {} if !_B.isHash options # ignore the `afterBuild` async callback cause of the 3-args signature
@@ -33,7 +35,7 @@ module.exports = specRunner = (err, specBB, options)->
   if require('compare-semver').lt libBB.urequire.VERSION, [minUrequireVersion]
     throw "`urequire` version >= '#{minUrequireVersion}' is needed for `urequire-ab-specrunner` version '#{pkg.version}'"
 
-  {upath, grunt} = libBB.urequire # if running through `grunt-urequire` grunt is set, otherwise undefined
+  grunt = libBB.urequire.grunt # if running through `grunt-urequire` grunt is set, otherwise undefined
 
   _B.Logger.addDebugPathLevel 'urequire-ab-specrunner', options.debugLevel or 0
 
@@ -75,7 +77,7 @@ module.exports = specRunner = (err, specBB, options)->
   # absolute dependency paths from lib, eg 'bower_components/lodash/lodash.compat', to blend into specs paths
   libRjsConf = libBB.build.calcRequireJsConfig '.'
   # paths relative to specsBB.build.dstPath, blendedWith lib's paths
-  specRjsConf = specBB.build.calcRequireJsConfig null, libRjsConf
+  specRjsConf = fixPaths specBB.build.calcRequireJsConfig null, libRjsConf
   l.deb 60, "All discovered paths, relative to specs dstPath:\n", specRjsConf.paths
 
   # make sure needed deps are available
@@ -92,17 +94,18 @@ module.exports = specRunner = (err, specBB, options)->
         `urequire-ab-specrunner` error: `dependencies.paths.xxx` for `#{dep}` is undefined,
          so the HTML wont know where to load it from.
          You can either:
-           a) `bower install #{dep}` and set `dependencies: paths: bower: true` in your config.
-               uRequire will automatically find it (also delete `bower-paths-cache.json`).
+           a) `$ bower install #{dep}` and set `dependencies: paths: bower: true` in your config.
+           b) `$ npm install #{dep}` and set `dependencies: paths: npm: true` in your config (but be careful cause some npm `node_modules` wont work on the browser).
            c) manually set `dependencies: paths: override` to the `#{dep}.js` lib eg
               `dependencies: paths: override: { '#{dep}': 'node_modules/#{dep}/path/to/#{dep}.js' }`
               (relative from project root)
-         Then re-run uRequire.
+
+         Then delete `urequire-local-paths-cache.json` and re-run uRequire.
         \n""" + l.prettify specRjsConf.paths
 
   # calc `require.config.paths` with blended the libBB paths
   if isAMD # paths relative to baseUrl (instead of specs dstPath), which will be set to lib's path
-    rjsConf = specBB.build.calcRequireJsConfig libBB.build.dstPath, libRjsConf
+    rjsConf = fixPaths specBB.build.calcRequireJsConfig libBB.build.dstPath, libRjsConf
   else  # paths are relative to specs `dstPath`,
     rjsConf = _.clone specRjsConf, true
 
@@ -138,7 +141,7 @@ module.exports = specRunner = (err, specBB, options)->
           meta charset: 'utf-8'
           title _title
         body ->
-          h1 'urequire-ab-specrunner:' + _title
+          h3 'urequire-ab-specrunner:' + _title
           div '#mocha'
         link rel: 'stylesheet', href: specRjsConf.paths.mocha[0] + '.css'
         # grunt-mocha / phantomjs require mocha & chai as plain <script> (using paths relative to specs dstPath)
@@ -163,9 +166,7 @@ module.exports = specRunner = (err, specBB, options)->
           rjsConf.baseUrl = specToLibPath
           rjsConf.paths[libBB.bundle.package.name] = upath.trimExt libBB.build.dstMainFilename
           rjsConf.paths.libToSpecPath = libToSpecPath
-
           l.deb 30, "Final AMD `require.config`:\n", rjsConf
-
           script src: specRjsConf.paths.requirejs[0] + '.js'
           script "require.config(#{ JSON.stringify rjsConf, null, 2 });"
         else
@@ -278,7 +279,7 @@ module.exports = specRunner = (err, specBB, options)->
     else
       for bb in [libBB, specBB]
         if bb.build.template.name in (sr.reject or [])
-          if name in _B.arrayize options.specRunners or []
+          if name in _B.arrayize options.specRunners
             throw new Error """
               `urequire-ab-specrunner` error: incompatible runtime - can't run requested specRunner `#{name}` with bundle `#{bb.build.target}` build with template `#{bb.build.template.name}`
                 * You can use any template among #{l.prettify _.reject templates, (t)->t in sr.reject}
@@ -307,3 +308,16 @@ sortDeps = (arr, shim)->
       if arr[i] in (shim?[arr[j]]?.deps or [])
         swap j, i
   arr
+
+# allow mocha, chai & requirejs to work from both node_modules & bower_components
+fixPaths = (rjsCfg)->
+  if rjsCfg.paths.mocha
+    rjsCfg.paths.mocha = _.uniq _.map rjsCfg.paths.mocha, (p)-> upath.dirname(p) + '/mocha'
+
+  if rjsCfg.paths.chai
+    rjsCfg.paths.chai = _.uniq _.map rjsCfg.paths.chai, (p)-> upath.dirname(p) + '/chai'
+
+  if rjsCfg.paths.requirejs
+    rjsCfg.paths.requirejs = _.uniq _.map rjsCfg.paths.requirejs, (p)-> p.replace('bin/r', 'require')
+
+  rjsCfg
