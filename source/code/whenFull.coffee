@@ -7,12 +7,8 @@ whenLibs = ['keys', 'function', 'node', 'callbacks', 'generator', 'sequence', 'p
 for wlib in whenLibs
   if _.isUndefined When[wlib]
     When[wlib] = require "when/#{wlib}"
-  else
-    throw new Error "when.#{wlib} not undefined while attatching `require('when/#{wlib}')` to it."
 
-if not _.isUndefined When.each
-  throw new Error "When.each already defined"
-else
+if _.isUndefined When.each
   When.each = (collection, handler)->
     if _B.isHash collection
       iterArray = _.keys collection

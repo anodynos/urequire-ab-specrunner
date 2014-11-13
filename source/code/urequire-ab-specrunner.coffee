@@ -1,4 +1,4 @@
-minUrequireVersion = "0.7.0-beta6"
+minUrequireVersion = "0.7.0-beta8"
 
 _ = (_B = require 'uberscore')._
 l = new _B.Logger 'urequire-ab-specrunner'
@@ -49,8 +49,7 @@ module.exports = specRunner = (err, specBB, options)->
       files: ["#{libBB.bundle.path}/**/*", "#{specBB.bundle.path}/**/*"]
       tasks: ["urequire:#{libBB.build.target}" , "urequire:#{specBB.build.target}"]
     watch.options = _.extend {spawn: false}, _.omit watchBB.build.watch, ['enabled', 'info']
-    l.ok "Found `watch` at `#{watchBB.build.target}` - queueing `grunt-contrib-watch` task `watch:#{task}`.\n",
-      if l.deb(30) then watch else ''
+    l.ok "Found `watch` at `#{watchBB.build.target}` - queueing `grunt-contrib-watch` task `watch:#{task}`.", if l.deb(30) then watch else ''
     grunt.config.merge 'watch': watch
     grunt.task.run "watch:#{task}"
 
@@ -58,8 +57,8 @@ module.exports = specRunner = (err, specBB, options)->
     specBB.build.watch.enabled = true
 
   if not (libBB.build.hasChanged or specBB.build.hasChanged) and gruntWatching
-    l.ok "No changes for `#{_title}` while `watch`-ing - not executing."
-    return
+    l.ok "No changes for **#{_title}** while `watch`-ing - not executing."
+    return When()
 
   # check for errors in either lib or spec bbs
   for bb in [libBB, specBB]
@@ -68,11 +67,12 @@ module.exports = specRunner = (err, specBB, options)->
         l.warn "Executing for `#{_title}` despite of errors in bundle `#{bb.build.target}` - cause `runOnErrors: true`"
       else
         l.er "Not executing for `#{_title}` cause of errors in bundle `#{bb.build.target}`"
-        return
+        return When()
 
   l.ok "Executing for #{_title}."
 
   isAMD = not ((libBB.build.template.name is 'combined') and (specBB.build.template.name is 'combined'))
+  isHTML = not ((libBB.build.template.name is 'nodejs') or (specBB.build.template.name is 'nodejs'))
 
   # absolute dependency paths from lib, eg 'bower_components/lodash/lodash.compat', to blend into specs paths
   libRjsConf = libBB.build.calcRequireJsConfig '.'
@@ -88,20 +88,21 @@ module.exports = specRunner = (err, specBB, options)->
 
   neededDepNames.push 'requirejs' if isAMD # usually not directly a dependency in lib/specs
 
-  for dep in neededDepNames
-    if (not specRjsConf.paths[dep]) and (dep isnt libBB.bundle.package.name)
-      throw new Error """
-        `urequire-ab-specrunner` error: `dependencies.paths.xxx` for `#{dep}` is undefined,
-         so the HTML wont know where to load it from.
-         You can either:
-           a) `$ bower install #{dep}` and set `dependencies: paths: bower: true` in your config.
-           b) `$ npm install #{dep}` and set `dependencies: paths: npm: true` in your config (but be careful cause some npm `node_modules` wont work on the browser).
-           c) manually set `dependencies: paths: override` to the `#{dep}.js` lib eg
-              `dependencies: paths: override: { '#{dep}': 'node_modules/#{dep}/path/to/#{dep}.js' }`
-              (relative from project root)
+  if isHTML
+    for dep in neededDepNames
+      if (not specRjsConf.paths[dep]) and (dep isnt libBB.bundle.package.name)
+        throw new Error """
+          `urequire-ab-specrunner` error: `dependencies.paths.xxx` for `#{dep}` is undefined,
+           so the HTML wont know where to load it from.
+           You can either:
+             a) `$ bower install #{dep}` and set `dependencies: paths: bower: true` in your config.
+             b) `$ npm install #{dep}` and set `dependencies: paths: npm: true` in your config (but be careful cause some npm `node_modules` wont work on the browser).
+             c) manually set `dependencies: paths: override` to the `#{dep}.js` lib eg
+                `dependencies: paths: override: { '#{dep}': 'node_modules/#{dep}/path/to/#{dep}.js' }`
+                (relative from project root)
 
-         Then delete `urequire-local-paths-cache.json` and re-run uRequire.
-        \n""" + l.prettify specRjsConf.paths
+           Then delete `urequire-local-paths-cache.json` and re-run uRequire.
+          \n""" + l.prettify specRjsConf.paths
 
   # calc `require.config.paths` with blended the libBB paths
   if isAMD # paths relative to baseUrl (instead of specs dstPath), which will be set to lib's path
@@ -141,7 +142,7 @@ module.exports = specRunner = (err, specBB, options)->
           meta charset: 'utf-8'
           title _title
         body ->
-          h3 'urequire-ab-specrunner:' + _title
+          h3 'Auto generated specs by `urequire-ab-specrunner` for:' + _title
           div '#mocha'
         link rel: 'stylesheet', href: specRjsConf.paths.mocha[0] + '.css'
         # grunt-mocha / phantomjs require mocha & chai as plain <script> (using paths relative to specs dstPath)
@@ -266,6 +267,7 @@ module.exports = specRunner = (err, specBB, options)->
         l.deb 50, "Saving a fake module of lib into spec's dstPath in `#{pkgJsonPath}`"
         fsp.outputFile(pkgJsonPath, JSON.stringify {
               "name": libBB.bundle.package.name
+              "description": "A fake module for `#{libBB.bundle.package.name}` generated by `urequire-ab-specrunner` used by its specs."
               "main": upath.join '../../', specToLibPath, libBB.build.dstMainFilename
             }, 'utf8'
         ).then ->
