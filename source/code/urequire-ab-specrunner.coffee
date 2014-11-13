@@ -10,7 +10,7 @@ fsp = require 'fs-promise' # uses fs-extra as well
 tidyP = When.node.lift require('htmltidy').tidy
 
 { renderable, render, html, doctype, head, link, meta, script, p
-body, title, h1, h2, h3, h4, div, comment, ul, li, raw } = teacup = require 'teacup'
+body, title, h1, h2, h3, h4, div, comment, ul, li, raw, table, tr, td, th, style } = teacup = require 'teacup'
 
 pkg = JSON.parse fsp.readFileSync __dirname + '/../../package.json'
 
@@ -89,7 +89,6 @@ module.exports = specRunner = (err, specBB, options)->
 
     neededDepNames.push 'requirejs' if isAMD # usually not directly a dependency in lib/specs
 
-
     for dep in neededDepNames
       if (not specRjsConf.paths[dep]) and (dep isnt libBB.bundle.package.name)
         throw new Error """
@@ -112,7 +111,7 @@ module.exports = specRunner = (err, specBB, options)->
       rjsConf = _.clone specRjsConf, true
 
     rjsConf.paths = _.pick rjsConf.paths, (v, depName)->
-      (depName in neededDepNames or []) and depName not in ['mocha', 'requirejs'] #  filter only those needed
+      (depName in neededDepNames) and depName not in ['mocha', 'requirejs'] #  filter only those needed
 
     l.deb 40, "Needed only `require.config.paths` for #{if isAMD then "AMD" else "plain <script>"}:\n", rjsConf.paths
 
@@ -123,7 +122,7 @@ module.exports = specRunner = (err, specBB, options)->
 
   # gather globals from options.global, dependencies.rootExports & rjs.shim exports
   getGlobalsPrint = ->
-    allGLobals = _.unique _.filter (_B.arrayize(options.globals) or []).concat _.flatten (
+    allGLobals = _.unique _.filter (_B.arrayize(options.globalsPrint) or []).concat _.flatten (
       for bb in [libBB, specBB]
         _.map(bb.build?.rjs?.shim, 'exports')
           .concat(_.reduce bb.bundle.dependencies.rootExports, ((allRootExports, re)-> allRootExports.concat re), [] )
@@ -135,7 +134,17 @@ module.exports = specRunner = (err, specBB, options)->
       g
     else ''
 
+
   generateHTML = ->
+
+    addRow = (name, lib, spec)->
+      tr ->
+        td '.tg-70v4', name
+        td '.tg-031e', lib or 'undefined'
+        td '.tg-031e', spec or 'undefined'
+
+    globalsPrint = getGlobalsPrint()
+    
     HTML = teacup.render ->
       doctype 5
       html ->
@@ -143,7 +152,33 @@ module.exports = specRunner = (err, specBB, options)->
           meta charset: 'utf-8'
           title _title
         body ->
-          h3 'Auto generated specs by `urequire-ab-specrunner` for:' + _title
+          h3 'Auto generated specs by `urequire-ab-specrunner`'
+          style 'text/css', '.tg  {border-collapse:collapse;border-spacing:0;border-color:#aabcfe;}\n  .tg td{font-family:Arial, sans-serif;font-size:14px;padding:3px 20px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#aabcfe;color:#669;background-color:#e8edff;}\n  .tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:3px 20px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#aabcfe;color:#039;background-color:#b9c9fe;}\n  .tg .tg-70v4{background-color:#cbcefb;color:#000000}'
+
+          table '.tg', ->
+            tr ->
+              td '.tg-70v4', 'Loader'
+              td '.tg-031e', if isAMD then "AMD (RequireJS `#{specRjsConf.paths.requirejs[0] + '.js'}`)" else '<script/>'
+            tr ->
+              td '.tg-70v4', '.globals'
+              td '.tg-031e', globalsPrint
+            tr ->
+              td '.tg-70v4', 'loaded deps'
+              td '.tg-031e', neededDepNames.join ', '
+            tr ->
+              td '.tg-70v4', 'watch'
+              td '.tg-031e', if libBB.build.watch.enabled then "enabled (note: HTML not regenerated)" else 'disabled'
+
+          table '.tg', ->
+            tr ->
+              th '.tg-031e'
+              th '.tg-031e', 'lib'
+              th '.tg-031e', 'spec'
+            addRow 'build.dstMainFilename', libBB.build.dstMainFilename, specBB.build.dstMainFilename
+            addRow 'build.target', libBB.build.target, specBB.build.target
+            addRow 'bundle.name', libBB.bundle.name, specBB.bundle.name
+            addRow 'build.template', libBB.build.template.name, specBB.build.template.name
+
           div '#mocha'
         link rel: 'stylesheet', href: specRjsConf.paths.mocha[0] + '.css'
         # grunt-mocha / phantomjs require mocha & chai as plain <script> (using paths relative to specs dstPath)
@@ -188,9 +223,9 @@ module.exports = specRunner = (err, specBB, options)->
                   'if (!window.PHANTOMJS) {'
                ) + """\n
                       if (window.mochaPhantomJS) {
-                        mochaPhantomJS.run()#{globs = getGlobalsPrint()};
+                        mochaPhantomJS.run()#{globalsPrint};
                       } else {
-                        mocha.run()#{globs};
+                        mocha.run()#{globalsPrint};
                       }
                     }
                """ + (if isAMD then ");" else '')
