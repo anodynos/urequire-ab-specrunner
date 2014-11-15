@@ -29,8 +29,12 @@ module.exports = specRunner = (err, specBB, options)->
   libBB = specBB.urequire.findBBExecutedBefore specBB
 
   if not libBB
-    l.er err = "The library bundleBuilder is missing - you need to build the 'lib' you want to run the specs against, just before these specs."
-    throw new Error '`urequire-ab-specrunner` error:' + err
+    err = """
+      The library bundleBuilder is missing:
+      You need to build the 'lib' you want to run the specs against, just before the specs.
+      I.e execute something like `$ grunt lib spec`, where `spec` has `afterBuild: require('urequire-ab-specrunner')`
+    """
+    throw new Error '`urequire-ab-specrunner`:' + err
 
   if require('compare-semver').lt libBB.urequire.VERSION, [minUrequireVersion]
     throw "`urequire` version >= '#{minUrequireVersion}' is needed for `urequire-ab-specrunner` version '#{pkg.version}'"
@@ -115,7 +119,7 @@ module.exports = specRunner = (err, specBB, options)->
 
     l.deb 40, "Needed only `require.config.paths` for #{if isAMD then "AMD" else "plain <script>"}:\n", rjsConf.paths
 
-    bb.bundle.ensureMain() if not bb.bundle.main for bb in [libBB, specBB]
+    libBB.bundle.ensureMain()
 
   specToLibPath = upath.relative specBB.build.dstPath, libBB.build.dstPath
   libToSpecPath = upath.relative libBB.build.dstPath, specBB.build.dstPath
@@ -174,7 +178,9 @@ module.exports = specRunner = (err, specBB, options)->
               th '.tg-031e'
               th '.tg-031e', 'lib'
               th '.tg-031e', 'spec'
-            addRow 'build.dstMainFilename', libBB.build.dstMainFilename, specBB.build.dstMainFilename
+            addRow 'build.dstPath', libBB.build.dstPath, specBB.build.dstPath
+            addRow 'build.dstMainFilename', libBB.build.dstMainFilename,
+              if specBB.bundle.main then specBB.build.dstMainFilename else 'none (all spec files loaded)'
             addRow 'build.target', libBB.build.target, specBB.build.target
             addRow 'bundle.name', libBB.bundle.name, specBB.bundle.name
             addRow 'build.template', libBB.build.template.name, specBB.build.template.name
@@ -214,11 +220,18 @@ module.exports = specRunner = (err, specBB, options)->
           comment "Loading library"
           script src: upath.join specToLibPath, libBB.build.dstMainFilename
           comment "Loading specs"
-          script src: specBB.build.dstMainFilename
+          script src: specBB.build.dstMainFilename # of combined template
 
         comment "Run mocha in AMD or plain script, taking care of phantomjs"
         script (if isAMD
-                  "require([ 'libToSpecPath/#{upath.trimExt specBB.build.dstMainFilename}' ], function() {"
+                  "require(['#{
+                    (
+                      if specBB.bundle.main or (specBB.build.template.name is 'combined')
+                        [ specBB.build.dstMainFilename ]
+                      else
+                        (mod.dstFilename for k, mod of specBB.bundle.modules)
+                    ).map((f)-> upath.join 'libToSpecPath/', upath.trimExt f).join("', '")
+                  }'], function() {"
                 else
                   'if (!window.PHANTOMJS) {'
                ) + """\n
@@ -249,7 +262,7 @@ module.exports = specRunner = (err, specBB, options)->
         isHTMLsaved = true
 
   runMochaShell = (cmd, filename)->
-    mochaParams  = _.filter((options.mochaOptions or '').split /\s/).concat filename
+    mochaParams  = _.filter ((options.mochaOptions or '') + filename).split /\s/
     l.deb 30, "Running shell `#{cmd} #{mochaParams.join ' '}`"
     if not options.exec #default
       cmd += '.cmd' if process.platform is "win32" # solves ENOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
@@ -307,7 +320,11 @@ module.exports = specRunner = (err, specBB, options)->
               "main": upath.join '../../', specToLibPath, libBB.build.dstMainFilename
             }, null, 2), 'utf8'
         ).then ->
-          runMochaShell 'mocha', specBB.build.dstMainFilepath
+          runMochaShell 'mocha',
+            if specBB.bundle.main
+              specBB.build.dstMainFilepath
+            else
+              "#{specBB.build.dstPath} --recursive"
 
   templates = ['UMD', 'UMDplain', 'AMD', 'nodejs', 'combined']
 
