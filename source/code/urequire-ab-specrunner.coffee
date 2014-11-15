@@ -180,7 +180,10 @@ module.exports = specRunner = (err, specBB, options)->
               th '.tg-031e', 'spec'
             addRow 'build.dstPath', libBB.build.dstPath, specBB.build.dstPath
             addRow 'build.dstMainFilename', libBB.build.dstMainFilename,
-              if specBB.bundle.main then specBB.build.dstMainFilename else 'none (all spec files loaded)'
+              if (specBB.bundle.main or specBB.build.template.name is 'combined')
+                specBB.build.dstMainFilename
+              else
+                'none (all spec files loaded)'
             addRow 'build.target', libBB.build.target, specBB.build.target
             addRow 'bundle.name', libBB.bundle.name, specBB.bundle.name
             addRow 'build.template', libBB.build.template.name, specBB.build.template.name
@@ -321,7 +324,7 @@ module.exports = specRunner = (err, specBB, options)->
             }, null, 2), 'utf8'
         ).then ->
           runMochaShell 'mocha',
-            if specBB.bundle.main
+            if specBB.bundle.main or (specBB.build.template.name is 'combined')
               specBB.build.dstMainFilepath
             else
               "#{specBB.build.dstPath} --recursive"
