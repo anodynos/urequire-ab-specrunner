@@ -1,4 +1,4 @@
-minUrequireVersion = "0.7.0-beta8"
+minUrequireVersion = "0.7.0-beta9"
 
 _ = (_B = require 'uberscore')._
 l = new _B.Logger 'urequire-ab-specrunner'
@@ -265,7 +265,7 @@ module.exports = specRunner = (err, specBB, options)->
         isHTMLsaved = true
 
   runMochaShell = (cmd, filename)->
-    mochaParams  = _.filter ((options.mochaOptions or '') + filename).split /\s/
+    mochaParams  = _.filter ((options.mochaOptions or '') + ' ' + filename).split /\s/
     l.deb 30, "Running shell `#{cmd} #{mochaParams.join ' '}`"
     if not options.exec #default
       cmd += '.cmd' if process.platform is "win32" # solves ENOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
