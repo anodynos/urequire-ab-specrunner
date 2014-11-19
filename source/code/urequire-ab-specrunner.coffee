@@ -1,34 +1,24 @@
-minUrequireVersion = "0.7.0-beta9"
-
+minUrequireVersion = "0.7.0-beta.11"
 _ = (_B = require 'uberscore')._
 l = new _B.Logger 'urequire-ab-specrunner'
+_.mixin (require 'underscore.string').exports()
 
-When = require './whenFull'
-
+upath = require 'upath'
 fsp = require 'fs-promise' # uses fs-extra as well
-
+When = require './whenFull'
 tidyP = When.node.lift require('htmltidy').tidy
-
+spawn = require('child_process').spawn
+execP = When.node.lift require("child_process").exec
 { renderable, render, html, doctype, head, link, meta, script, p
 body, title, h1, h2, h3, h4, div, comment, ul, li, raw, table, tr, td, th, style } = teacup = require 'teacup'
 
 pkg = JSON.parse fsp.readFileSync __dirname + '/../../package.json'
-
-upath = require 'upath'
-
-spawn = require('child_process').spawn
-execP = When.node.lift require("child_process").exec
-
-gruntWatching = false
-
+isWatching = false
 # @todo: modulerize as an extendible class, so other test frameworks can be based on it!
-
 module.exports = specRunner = (err, specBB, options)->
   options = {} if !_B.isHash options # ignore the `afterBuild` async callback cause of the 3-args signature
 
-  libBB = specBB.urequire.findBBExecutedBefore specBB
-
-  if not libBB
+  if not libBB = specBB.urequire.findBBExecutedBefore specBB
     err = """
       The library bundleBuilder is missing:
       You need to build the 'lib' you want to run the specs against, just before the specs.
@@ -36,33 +26,30 @@ module.exports = specRunner = (err, specBB, options)->
     """
     throw new Error '`urequire-ab-specrunner`:' + err
 
-  if require('compare-semver').lt libBB.urequire.VERSION, [minUrequireVersion]
+  if require('semver').lt libBB.urequire.VERSION, minUrequireVersion
     throw "`urequire` version >= '#{minUrequireVersion}' is needed for `urequire-ab-specrunner` version '#{pkg.version}'"
 
   grunt = libBB.urequire.grunt # if running through `grunt-urequire` grunt is set, otherwise undefined
-
   _B.Logger.addDebugPathLevel 'urequire-ab-specrunner', options.debugLevel or 0
+  _title = "lib.target:'#{ libBB.build.target }', spec.target:'#{ specBB.build.target }'"
 
-  _title = "libBundle `#{ libBB.build.target }`, specBundle: `#{ specBB.build.target }`"
+  # invoke watch
+  if grunt and (not isWatching) and
+    (options.watch or _.any([libBB, specBB], (bb)-> bb.build.watch.enabled is true))
+      isWatching = true
+      watchesToBlend = [ # all blended as watch options
+        before: "urequire:#{libBB.build.target}"
+        options.watch
+        specBB.build.watch
+        libBB.build.watch
+      ]
+      watchesToBlend.debugLevel = options.debugLevel # not very neat
+      require('urequire-ab-grunt-contrib-watch') err, specBB, watchesToBlend
 
-  # setup any possible watch before returning cause of errors / nochanges
-  if grunt and !gruntWatching and watchBB = _.find([libBB, specBB], (bb)-> bb.build.watch.enabled is true)
-    gruntWatching = true
-    task = "#{libBB.build.target}_#{specBB.build.target}"
-    (watch = {})[task] =
-      files: ["#{libBB.bundle.path}/**/*", "#{specBB.bundle.path}/**/*"]
-      tasks: ["urequire:#{libBB.build.target}" , "urequire:#{specBB.build.target}"]
-    watch.options = _.extend {spawn: false}, _.omit watchBB.build.watch, ['enabled', 'info']
-    l.ok "Found `watch` at `#{watchBB.build.target}` - queueing `grunt-contrib-watch` task `watch:#{task}`.", if l.deb(30) then watch else ''
-    grunt.config.merge 'watch': watch
-    grunt.task.run "watch:#{task}"
-
-    libBB.build.watch.enabled = true
-    specBB.build.watch.enabled = true
-
-  if not (libBB.build.hasChanged or specBB.build.hasChanged) and gruntWatching
-    l.ok "No changes for **#{_title}** while `watch`-ing - not executing."
-    return When()
+  if not (libBB.build.hasChanged or specBB.build.hasChanged)
+    if isWatching
+      l.ok "No changes for `#{_title}` while `watch`-ing - not executing."
+      return When()
 
   # check for errors in either lib or spec bbs
   for bb in [libBB, specBB]
@@ -78,48 +65,22 @@ module.exports = specRunner = (err, specBB, options)->
   isAMD = not ((libBB.build.template.name is 'combined') and (specBB.build.template.name is 'combined'))
   isHTML = not ((libBB.build.template.name is 'nodejs') or (specBB.build.template.name is 'nodejs'))
 
-  # absolute dependency paths from lib, eg 'bower_components/lodash/lodash.compat', to blend into specs paths
-  libRjsConf = libBB.build.calcRequireJsConfig '.'
-  # paths relative to specsBB.build.dstPath, blendedWith lib's paths
-  specRjsConf = fixPaths specBB.build.calcRequireJsConfig null, libRjsConf
-  l.deb 60, "All discovered paths, relative to specs dstPath:\n", specRjsConf.paths
-
-  # make sure needed deps are available
   if isHTML
-    neededDepNames = _.uniq _.flatten([
-      _.keys(libBB.bundle.local_nonNode_depsVars)
-      _.keys(specBB.bundle.local_nonNode_depsVars)
-      'mocha', 'chai' ]).map (dep)-> dep.split('/')[0] #cater for locals like 'when/callbacks'
+    # absolute dependency paths from lib, eg 'bower_components/lodash/lodash.compat', to blend into specs paths
+    libRjsConf = libBB.build.calcRequireJsConfig '.', null, true
+    # paths relative to specsBB.build.dstPath, blendedWith lib's paths
+    rjsConf = fixPathsForNode specBB.build.calcRequireJsConfig null, libRjsConf, ['mocha', 'chai', 'requirejs'], [libBB.bundle.package.name]
+    l.deb 60, "All rjsConf paths, relative to `specBB.build.dstPath = #{specBB.build.dstPath} `:\n", rjsConf.paths
+    requirejs_path = rjsConf.paths.requirejs[0]
+    mocha_path = rjsConf.paths.mocha[0]
+    chai_path = rjsConf.paths.chai[0]
 
-    neededDepNames.push 'requirejs' if isAMD # usually not directly a dependency in lib/specs
-
-    for dep in neededDepNames
-      if (not specRjsConf.paths[dep]) and (dep isnt libBB.bundle.package.name)
-        throw new Error """
-          `urequire-ab-specrunner` error: `dependencies.paths.xxx` for `#{dep}` is undefined,
-           so the HTML wont know where to load it from.
-           You can either:
-             a) `$ bower install #{dep}` and set `dependencies: paths: bower: true` in your config.
-             b) `$ npm install #{dep}` and set `dependencies: paths: npm: true` in your config (but be careful cause some npm `node_modules` wont work on the browser).
-             c) manually set `dependencies: paths: override` to the `#{dep}.js` lib eg
-                `dependencies: paths: override: { '#{dep}': 'node_modules/#{dep}/path/to/#{dep}.js' }`
-                (relative from project root)
-
-           Then delete `urequire-local-paths-cache.json` and re-run uRequire.
-          \n""" + l.prettify specRjsConf.paths
-
-    # calc `require.config.paths` with blended the libBB paths
     if isAMD # paths relative to baseUrl (instead of specs dstPath), which will be set to lib's path
-      rjsConf = fixPaths specBB.build.calcRequireJsConfig libBB.build.dstPath, libRjsConf
-    else  # paths are relative to specs `dstPath`,
-      rjsConf = _.clone specRjsConf, true
+      rjsConf = fixPathsForNode specBB.build.calcRequireJsConfig libBB.build.dstPath, libRjsConf, true, [libBB.bundle.package.name]
 
-    rjsConf.paths = _.pick rjsConf.paths, (v, depName)->
-      (depName in neededDepNames) and depName not in ['mocha', 'requirejs'] #  filter only those needed
-
-    l.deb 40, "Needed only `require.config.paths` for #{if isAMD then "AMD" else "plain <script>"}:\n", rjsConf.paths
-
-    libBB.bundle.ensureMain()
+    delete rjsConf.paths.mocha
+    delete rjsConf.paths.requirejs
+    l.deb 40, "Final needed only `require.config.paths` for #{if isAMD then "AMD" else "plain <script>"}:\n", rjsConf.paths
 
   specToLibPath = upath.relative specBB.build.dstPath, libBB.build.dstPath
   libToSpecPath = upath.relative libBB.build.dstPath, specBB.build.dstPath
@@ -137,7 +98,6 @@ module.exports = specRunner = (err, specBB, options)->
       l.deb 50, "Discovered ", g = ".globals([#{ _.map(allGLobals, (exp)-> "'#{exp}'").join(', ') }])"
       g
     else ''
-
 
   generateHTML = ->
 
@@ -162,13 +122,13 @@ module.exports = specRunner = (err, specBB, options)->
           table '.tg', ->
             tr ->
               td '.tg-70v4', 'Loader'
-              td '.tg-031e', if isAMD then "AMD (RequireJS `#{specRjsConf.paths.requirejs[0] + '.js'}`)" else '<script/>'
+              td '.tg-031e', if isAMD then "AMD (RequireJS `#{requirejs_path + '.js'}`)" else '<script/>'
             tr ->
               td '.tg-70v4', '.globals'
               td '.tg-031e', globalsPrint
             tr ->
               td '.tg-70v4', 'loaded deps'
-              td '.tg-031e', neededDepNames.join ', '
+              td '.tg-031e', _.keys(rjsConf.paths).join ', '
             tr ->
               td '.tg-70v4', 'watch'
               td '.tg-031e', if libBB.build.watch.enabled then "enabled (note: HTML not regenerated)" else 'disabled'
@@ -189,10 +149,10 @@ module.exports = specRunner = (err, specBB, options)->
             addRow 'build.template', libBB.build.template.name, specBB.build.template.name
 
           div '#mocha'
-        link rel: 'stylesheet', href: specRjsConf.paths.mocha[0] + '.css'
+        link rel: 'stylesheet', href: mocha_path + '.css'
         # grunt-mocha / phantomjs require mocha & chai as plain <script> (using paths relative to specs dstPath)
-        script src: specRjsConf.paths.mocha[0] + '.js'
-        script src: specRjsConf.paths.chai[0] + '.js'
+        script src: mocha_path + '.js'
+        script src: chai_path + '.js'
 
         script options.injectCode if options.injectCode
         raw options.injectRaw if options.injectRaw
@@ -213,11 +173,11 @@ module.exports = specRunner = (err, specBB, options)->
           rjsConf.paths[libBB.bundle.package.name] = upath.trimExt libBB.build.dstMainFilename
           rjsConf.paths.libToSpecPath = libToSpecPath
           l.deb 30, "Final AMD `require.config`:\n", rjsConf
-          script src: specRjsConf.paths.requirejs[0] + '.js'
+          script src: requirejs_path + '.js'
           script "require.config(#{ JSON.stringify rjsConf, null, 2 });"
         else
-          # loading all deps as <script>, sorted respecting shim order
-          for dep in sortDeps _.keys(rjsConf.paths), rjsConf.shim
+          comment "Loading all deps as <script>, sorted with shim order"
+          for dep in rjsConf.shimSortedDeps
             script src: rjsConf.paths[dep] + '.js'
 
           comment "Loading library"
@@ -245,10 +205,7 @@ module.exports = specRunner = (err, specBB, options)->
                       }
                     }
                """ + (if isAMD then ");" else '')
-    if options.tidy
-      tidyP HTML
-    else
-      When HTML
+    if options.tidy then tidyP(HTML) else When(HTML)
 
   specPathHTML = "#{specBB.build.dstPath}/urequire-ab-specrunner-#{if isAMD then 'AMD' else 'script'}-#{libBB.build.target}_#{specBB.build.target}.html"
   writeHTMLSpec = (htmlText)->
@@ -285,16 +242,10 @@ module.exports = specRunner = (err, specBB, options)->
         (err)-> l.err err
       )
 
-  #  # UMD in nodejs mocha runner
-  #  # write a "requirejs.config.json" with { baseUrl:"../UMD" } to spec's dstPath
-  #  writeRequirejsConfig = ->
-  #    fsp.writeFileP( upath.join(specBB.build.dstPath, "requirejs.config.json"),
-  #      JSON.stringify({baseUrl:specToLibPath}, null, 2) , 'utf8')
-
   specRunners =
     'grunt-mocha':
       reject: ['nodejs']
-      run: When.lift -> # @todo: must be the last one to run ?
+      run: When.lift ->
         if grunt
           generateAndSaveHTML().then ->
             mocha = {}
@@ -331,7 +282,8 @@ module.exports = specRunner = (err, specBB, options)->
 
   templates = ['UMD', 'UMDplain', 'AMD', 'nodejs', 'combined']
 
-  When.each _B.arrayize(options.specRunners or ['mocha-cli', 'mocha-phantomjs']), (name)->
+  specRunnersExecuted = 0
+  When.each(_B.arrayize(options.specRunners or ['mocha-cli', 'mocha-phantomjs']), (name)->
     if not sr = specRunners[name]
       throw new Error "`urequire-ab-specrunner` error: unknown mocha specRunner '#{name}' - exiting."
     else
@@ -348,34 +300,24 @@ module.exports = specRunner = (err, specBB, options)->
           l.debug 80, "Ignoring incompatible runtime specRunner `#{name}` for  bundle `#{bb.build.target}` build with template `#{bb.build.template.name}`"
           return # silently ignore / dont run if not requested by user
       l.debug 80, "Invoking specRunner `#{name}` for lib `#{libBB.build.target}` against spec `#{specBB.build.target}`"
+      specRunnersExecuted++
       sr.run()
-
-specRunner.options = (opts)->
-  (err, bb)-> specRunner err, bb, opts # promise-based fn signature must have 2 args
-
-# yeah, we DO need bubblesort,
-# deps are two-way and it's the simplest n^2 way
-sortDeps = (arr, shim)->
-  swap = (a, b)->
-    temp = arr[a]
-    arr[a] = arr[b]
-    arr[b] = temp
-
-  for dep_i, i in arr
-    for dep_j, j in arr
-      if arr[i] in (shim?[arr[j]]?.deps or [])
-        swap j, i
-  arr
+  ).then ->
+    if specRunnersExecuted is 0
+      l.warn "No compatible specRunners were found to execute - check your templates compatibility (eg 'nodejs' + 'AMD' work go together)."
+    else
+      l.ok "Finished executing #{specRunnersExecuted} compatible specRunners."
 
 # allow mocha, chai & requirejs to work from both node_modules & bower_components
-fixPaths = (rjsCfg)->
+fixPathsForNode = (rjsCfg)->
   if rjsCfg.paths.mocha
     rjsCfg.paths.mocha = _.uniq _.map rjsCfg.paths.mocha, (p)-> upath.dirname(p) + '/mocha'
-
   if rjsCfg.paths.chai
     rjsCfg.paths.chai = _.uniq _.map rjsCfg.paths.chai, (p)-> upath.dirname(p) + '/chai'
-
   if rjsCfg.paths.requirejs
     rjsCfg.paths.requirejs = _.uniq _.map rjsCfg.paths.requirejs, (p)-> p.replace('bin/r', 'require')
-
   rjsCfg
+
+# passing options
+specRunner.options = (opts)->
+  (err, bb)-> specRunner err, bb, opts # promise-based fn signature must have 2 args
