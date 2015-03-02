@@ -1,4 +1,4 @@
-minUrequireVersion = "0.7.0-beta.11"
+minUrequireVersion = "0.7.0-beta.14"
 _ = (_B = require 'uberscore')._
 l = new _B.Logger 'urequire-ab-specrunner'
 _.mixin (require 'underscore.string').exports()
@@ -14,9 +14,15 @@ body, title, h1, h2, h3, h4, div, comment, ul, li, raw, table, tr, td, th, style
 
 pkg = JSON.parse fsp.readFileSync __dirname + '/../../package.json'
 isWatching = false
+
 # @todo: modulerize as an extendible class, so other test frameworks can be based on it!
 module.exports = specRunner = (err, specBB, options)->
-  options = {} if !_B.isHash options # ignore the `afterBuild` async callback cause of the 3-args signature
+
+  if @options             # using @options introduced in "0.7.0-beta.15"
+    options = @options
+  else
+    if !_B.isHash options # support pre "0.7.0-beta.15"
+      options = {}        # ignore the `afterBuild` async callback cause of the 3-args signature
 
   if not libBB = specBB.urequire.findBBExecutedBefore specBB
     err = """
@@ -27,7 +33,7 @@ module.exports = specRunner = (err, specBB, options)->
     throw new Error '`urequire-ab-specrunner`:' + err
 
   if require('semver').lt libBB.urequire.VERSION, minUrequireVersion
-    throw "`urequire` version >= '#{minUrequireVersion}' is needed for `urequire-ab-specrunner` version '#{pkg.version}'"
+    throw new Error "Incompatible `urequire` version '#{libBB.urequire.VERSION}'. You need `urequire` version >= '#{minUrequireVersion}' for `urequire-ab-specrunner` version '#{pkg.version}'"
 
   grunt = libBB.urequire.grunt # if running through `grunt-urequire` grunt is set, otherwise undefined
   _B.Logger.addDebugPathLevel 'urequire-ab-specrunner', options.debugLevel or 0
@@ -114,9 +120,9 @@ module.exports = specRunner = (err, specBB, options)->
       html ->
         head ->
           meta charset: 'utf-8'
-          title _title
+          title 'urequire-ab-specrunner:' + _title
         body ->
-          h3 'Auto generated specs by `urequire-ab-specrunner`'
+          h3 "Auto generated spec runner by `urequire-ab-specrunner` v'#{pkg.version}"
           style 'text/css', '.tg  {border-collapse:collapse;border-spacing:0;border-color:#aabcfe;}\n  .tg td{font-family:Arial, sans-serif;font-size:14px;padding:3px 20px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#aabcfe;color:#669;background-color:#e8edff;}\n  .tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:3px 20px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#aabcfe;color:#039;background-color:#b9c9fe;}\n  .tg .tg-70v4{background-color:#cbcefb;color:#000000}'
 
           table '.tg', ->
@@ -177,7 +183,7 @@ module.exports = specRunner = (err, specBB, options)->
           script "require.config(#{ JSON.stringify rjsConf, null, 2 });"
         else
           comment "Loading all deps as <script>, sorted with shim order"
-          for dep in rjsConf.shimSortedDeps
+          for dep in rjsConf.shimSortedDeps when dep isnt 'chai' # already loaded
             script src: rjsConf.paths[dep] + '.js'
 
           comment "Loading library"
@@ -185,7 +191,7 @@ module.exports = specRunner = (err, specBB, options)->
           comment "Loading specs"
           script src: specBB.build.dstMainFilename # of combined template
 
-        comment "Run mocha in AMD or plain script, taking care of phantomjs"
+        comment "Invoke `mocha.run()` as #{if isAMD then 'AMD' else 'plain script'}, taking care of phantomjs"
         script (if isAMD
                   "require(['#{
                     (
