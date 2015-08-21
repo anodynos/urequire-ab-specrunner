@@ -1,4 +1,4 @@
-minUrequireVersion = "0.7.0-beta.14"
+minUrequireVersion = "0.7.0-beta.21"
 _ = (_B = require 'uberscore')._
 l = new _B.Logger 'urequire-ab-specrunner'
 _.mixin (require 'underscore.string').exports()
