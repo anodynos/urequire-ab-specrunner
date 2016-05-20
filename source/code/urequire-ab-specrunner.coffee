@@ -1,4 +1,4 @@
-minUrequireVersion = "0.7.0-beta.25"
+minUrequireVersion = "0.7.0-beta.27"
 _B = require 'uberscore'
 _ = require 'lodash'
 l = new _B.Logger 'urequire-ab-specrunner'
