@@ -286,7 +286,7 @@ module.exports = specRunner = (err, specBB, options)->
               )
             }, null, 2), 'utf8'
         ).then ->
-          runMochaShell 'mocha',
+          runMochaShell './node_modules/.bin/mocha',
             if specBB.bundle.main or (specBB.build.template.name is 'combined')
               specBB.build.dstMainFilepath
             else
