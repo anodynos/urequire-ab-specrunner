@@ -232,7 +232,7 @@ module.exports = specRunner = (err, specBB, options)->
     mochaParams  = _.filter ((options.mochaOptions or '') + ' ' + filename).split /\s/
     l.deb 30, "Running shell `#{cmd} #{mochaParams.join ' '}`"
     if not options.exec #default
-      cmd += '.cmd' if process.platform is "win32" # solves ENOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
+      cmd = cmd.replace(/\//g, '\\') + '.cmd' if process.platform is "win32" # solves ENOENT http://stackoverflow.com/questions/17516772/using-nodejss-spawn-causes-unknown-option-and-error-spawn-enoent-err
       l.ok "spawn-ing `#{cmd} #{mochaParams.join ' '}`"
       When.promise (resolve, reject)->
         cp = spawn cmd, mochaParams
