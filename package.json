@@ -1,10 +1,10 @@
 {
   "name": "urequire-ab-specrunner",
   "description": "Automagically generates & runs mocha/chai/phantomjs tests from a uRequire `lib` & `specs` build.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "homepage": "https://github.com/anodynos/urequire-ab-specrunner",
   "author": {
-    "name": "Agelos Pikoulas",
+    "name": "Angelos Pikoulas",
     "email": "agelos.pikoulas@gmail.com"
   },
   "licenses": [
