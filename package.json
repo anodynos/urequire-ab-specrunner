@@ -55,7 +55,7 @@
     "htmltidy": "0.0.6",
     "teacup": "0.4.x",
     "uberscore": "0.0.17",
-    "underscore.string": "^2.3.3",
+    "underscore.string": "^3.3.5",
     "urequire-ab-grunt-contrib-watch": "0.0.x",
     "upath": "0.1.x",
     "when": "^3.7.5"
